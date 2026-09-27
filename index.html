@@ -426,6 +426,9 @@ function stats() {
 }
 // 保存するときは計算用の項目（_で始まる）を落とす
 const clean = d => JSON.parse(JSON.stringify(d, (k, v) => k.startsWith('_') ? undefined : v));
+// Firestore は「配列の中の配列」を保存できないので、対戦は {a, b} の形にして保存する
+const toStore = d => { const x = clean(d); (x.rows || []).forEach(r => { r.games = (r.games || []).map(g => ({ a: g[0] || '', b: g[1] || '' })); }); return x; };
+const fromStore = d => { (d.rows || []).forEach(r => { r.games = (r.games || []).map(g => Array.isArray(g) ? g : [g.a || '', g.b || '']); }); return d; };
 
 // ---------- 総当たりを組む ----------
 function circleRounds(T) {
@@ -509,7 +512,7 @@ function save() {
 function flush() {
   if (mode !== 'cloud' || !dirty) return;
   dirty = false;
-  FB.setDoc(docRef, clean(S)).then(() => status('保存しました')).catch(e => status('保存できませんでした。通信を確認してください（' + e.code + '）'));
+  FB.setDoc(docRef, toStore(S)).then(() => status('保存しました')).catch(e => status('保存できませんでした。通信を確認してください（' + e.code + '）'));
 }
 function remember(c, title) {
   const r = lsGet(LS_RECENT, []).filter(x => x.code !== c); r.unshift({ code: c, title: title || '' }); lsSet(LS_RECENT, r.slice(0, 6));
@@ -529,7 +532,7 @@ async function openCloud(c) {
       toast('この進行表は削除されました'); return leave();
     }
     if (snap.metadata.hasPendingWrites || (!first && dirty)) return;
-    S = snap.data();
+    S = fromStore(snap.data());
     if (first) {
       first = false; mode = 'cloud'; code = c; lsSet(LS_LAST, c); remember(c, S.title);
       if (pendingPin && hashPin(c, pendingPin) === S.pinHash) { lsSet('hb-admin-' + c, S.pinHash); lsSet('hb-pin-' + c, pendingPin); }
@@ -551,7 +554,7 @@ async function createCloud(pin) {
   if (!c) return gateMsg('createMsg', '進行表番号を用意できませんでした。もう一度お試しください。');
   const d = sampleDoc();
   d.title = '練習試合'; d.pinHash = hashPin(c, pin); d.createdAt = Date.now();
-  try { await FB.setDoc(refFor(c), clean(d)); } catch (e) { return gateMsg('createMsg', '進行表を作れませんでした（' + e.code + '）'); }
+  try { await FB.setDoc(refFor(c), toStore(d)); } catch (e) { return gateMsg('createMsg', '進行表を作れませんでした（' + e.code + '）'); }
   lsSet('hb-admin-' + c, d.pinHash); lsSet('hb-pin-' + c, pin);
   await registerOwned(pin, c, d);
   prefs.tab = 'edit'; savePrefs();
