@@ -326,6 +326,7 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
           <div id="teamList" style="display:flex;flex-direction:column;gap:8px"></div>
           <button class="btn" id="addTeam" type="button">＋ チームを追加</button>
           <p class="hint">「組み合わせを作る」で、全チームが総当たりになるように並べます。同じチームが続けて出る「連戦」がいちばん少ない並びを選びます。</p>
+          <div id="schoolArea" style="display:flex;flex-direction:column;gap:6px"></div>
           <div id="brkArea" style="display:flex;flex-direction:column;gap:10px"></div>
           <div id="genArea"></div>
         </details>
@@ -492,7 +493,7 @@ function buildOnce(T, base, rnd) {
   return { slots, cost: slots.length * 100000 + triple * 1000 + back * 10 };
 }
 function generate() {
-  const T = teams(), base = circleRounds(T);
+  const T = teams(), base = circleRounds(T).filter(([a, b]) => !(avoidSame() && sameSchool(a, b)));
   let best = buildOnce(T, base, false);
   const t0 = Date.now();
   while (best.cost % 100000 && Date.now() - t0 < 600) { const t = buildOnce(T, base, true); if (t.cost < best.cost) best = t; }
@@ -507,6 +508,18 @@ function generate() {
     if (add) rows.push(ev(b.label || '休憩', b.dur === S.dur ? null : b.dur));
   });
   S.rows = rows;
+}
+// 名前の最後の A・B・1・2・①… や「チーム」を外した部分が同じなら、同じ学校とみなす
+function schoolOf(name) {
+  const n = String(name).trim().replace(/\s*チーム$/, '').replace(/[\s・\-－ー_（(]*([A-Za-zＡ-Ｚａ-ｚ]|[0-9０-９]{1,2}|[①-⑳])[)）]?$/, '').trim();
+  return n || String(name).trim();
+}
+const sameSchool = (a, b) => a && b && a !== b && schoolOf(a) === schoolOf(b);
+const avoidSame = () => S.sameSchool !== false;
+function schoolGroups() {
+  const g = {};
+  teams().forEach(t => (g[schoolOf(t)] = g[schoolOf(t)] || []).push(t));
+  return Object.values(g).filter(x => x.length > 1);
 }
 function brk() { return Object.assign({ mode: 'none', n: 3, label: '', dur: 15 }, S.brk || {}); }
 
@@ -709,6 +722,10 @@ function renderEdit() {
   stepper($('st-courts'), 'courts', S.courts, '面'); stepper($('st-cycles'), 'cycles', S.cycles, '回');
   $('teamCount').textContent = T.length + 'チーム';
   $('teamList').innerHTML = S.teams.map((t, i) => `<div class="team-line"><span class="no">${i + 1}</span><input id="team-${i}" data-team="${i}" value="${esc(t)}" placeholder="チーム名"><button type="button" data-delteam="${i}" aria-label="削除">×</button></div>`).join('');
+  const groups = schoolGroups();
+  $('schoolArea').innerHTML = `<label style="display:flex;align-items:center;gap:8px;font-size:15px"><input type="checkbox" id="sameSchool" style="width:22px;min-height:22px" ${avoidSame() ? 'checked' : ''}> 同じ学校のチームどうしは対戦しない</label>
+    ${groups.length ? `<div class="rest">同じ学校とみなすチーム：${groups.map(g => `<span class="chip">${g.map(esc).join('・')}</span>`).join('')}</div>` : ''}
+    <p class="hint">「高津A」「高津B」のように、名前の最後の A・B・1・2 などを外した部分が同じだと、同じ学校とみなします。</p>`;
   const b = brk();
   $('brkArea').innerHTML = `<label class="f">特別枠（休憩・1年生の試合・昼休みなど）を自動で入れる
       <select id="brkMode"><option value="none" ${b.mode === 'none' ? 'selected' : ''}>入れない</option><option value="cycle" ${b.mode === 'cycle' ? 'selected' : ''}>総当たり1巡ごとに入れる</option><option value="n" ${b.mode === 'n' ? 'selected' : ''}>決まった試合数ごとに入れる</option></select></label>
@@ -747,11 +764,13 @@ function renderEdit() {
         const [a, b] = r.games[c];
         const warn = [a, b].filter(x => x && r._back.includes(x));
         const dup = (a && a === b) || [a, b].some(x => x && r._dup.includes(x));
+        const same = sameSchool(a, b);
         h += `<div class="court"><span class="cl">${CL(c)}</span>
           <select id="g-${r.id}-${c}-0" data-i="${i}" data-g="${c}" data-s="0" aria-label="${CL(c)}コート 1チーム目">${teamOpts(a)}</select><span class="vs">対</span>
           <select id="g-${r.id}-${c}-1" data-i="${i}" data-g="${c}" data-s="1" aria-label="${CL(c)}コート 2チーム目">${teamOpts(b)}</select>
           ${warn.length ? `<span class="warn">連戦：${warn.map(esc).join('・')}</span>` : ''}
-          ${dup ? `<span class="warn">同じチームが2か所に入っています</span>` : ''}</div>`;
+          ${dup ? `<span class="warn">同じチームが2か所に入っています</span>` : ''}
+          ${same ? `<span class="warn">同じ学校どうしの対戦です</span>` : ''}</div>`;
       }
       h += `<div class="rest">空き ${r._rest.length ? r._rest.map(x => `<span class="chip">${esc(x)}</span>`).join('') : '<span>なし</span>'}</div>`;
     }
@@ -925,6 +944,7 @@ $('editView').addEventListener('change', e => {
   if (el.id === 'title') S.title = el.value;
   else if (el.id === 'date') S.date = el.value;
   else if (el.id === 'venue') S.venue = el.value;
+  else if (el.id === 'sameSchool') S.sameSchool = el.checked;
   else if (el.id === 'brkMode') S.brk = Object.assign(brk(), { mode: el.value });
   else if (el.id === 'brkLabel') S.brk = Object.assign(brk(), { label: el.value });
   else if (el.id === 'start') { if (el.value) S.start = el.value; }
