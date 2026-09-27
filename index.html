@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ハンドボール進行表</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Semi+Condensed:wght@500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#eef2f6; --card:#ffffff; --ink:#18212e; --sub:#5a6778; --line:#d3dbe5;
+  --court:#1b5aa6; --court-ink:#ffffff; --court-soft:#e3edf9;
+  --goal:#e0702a; --goal-soft:#fcebdd;
+  --rest:#e8ecf1; --warn:#b42318; --warn-soft:#fdecea; --event:#fff4cc; --event-ink:#6b5200;
+  --now:#e7f6ec; --now-ink:#1d7a3e;
+  --jp:"BIZ UDPGothic","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --num:"Barlow Semi Condensed","BIZ UDPGothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme:dark;
+    --bg:#111820; --card:#1a232e; --ink:#e6ebf2; --sub:#98a5b6; --line:#2e3a48;
+    --court:#6ea6ec; --court-ink:#0d1520; --court-soft:#1c2e45;
+    --goal:#f29a5c; --goal-soft:#3a281a;
+    --rest:#232e3a; --warn:#f3867c; --warn-soft:#3b2220; --event:#352f17; --event-ink:#f1d98a;
+    --now:#173524; --now-ink:#7fd89c;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--jp);font-size:16px;line-height:1.5}
+.wrap{max-width:760px;margin:0 auto;padding-inline:16px;padding-block:0 96px}
+h1,h2,b{text-wrap:balance}
+h2{margin:6px 0 0;font-size:15px;color:var(--sub);font-weight:700;letter-spacing:.04em}
+section{display:flex;flex-direction:column;gap:12px;padding-top:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--sub)}
+input,select{font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-height:44px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--goal);outline-offset:1px}
+.hint{font-size:13px;color:var(--sub);margin:0}
+.msg{font-size:14px;color:var(--warn);margin:0;font-weight:700}
+.btn{font:inherit;font-size:15px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);min-height:44px;padding:8px 14px;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--court);border-color:var(--court);color:var(--court-ink);font-weight:700}
+.btn.goal{background:var(--goal);border-color:var(--goal);color:#fff;font-weight:700}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.btn.small{min-height:38px;font-size:14px;padding:6px 10px}
+.btn.link{background:none;border:0;color:var(--court);text-decoration:underline;min-height:40px}
+.row-btns{display:flex;flex-wrap:wrap;gap:8px}
+.row-btns .btn{flex:1 1 auto}
+.inrow{display:flex;gap:8px;align-items:flex-end}
+.inrow>*:first-child{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* 入口 */
+.gate{display:flex;flex-direction:column;gap:14px;padding-top:28px}
+.gate h1{margin:0;font-size:24px;display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:24px;border:2.5px solid var(--court);border-radius:3px;position:relative;flex:0 0 auto}
+.mark::before,.mark::after{content:"";position:absolute;top:50%;width:10px;height:14px;border:2.5px solid var(--goal);transform:translateY(-50%)}
+.mark::before{left:-2.5px;border-left:0;border-radius:0 10px 10px 0}
+.mark::after{right:-2.5px;border-right:0;border-radius:10px 0 0 10px}
+.lead{margin:0;color:var(--sub)}
+.codebox input{font-family:var(--num);font-size:28px;font-weight:700;letter-spacing:.3em;text-align:center}
+.or{font-size:13px;color:var(--sub);text-align:center;display:flex;align-items:center;gap:10px}
+.or::before,.or::after{content:"";flex:1;border-top:1px solid var(--line)}
+.list{display:flex;flex-direction:column;gap:6px}
+.list button{display:grid;grid-template-columns:auto 1fr;gap:0 10px;text-align:left;font:inherit;background:var(--rest);border:0;border-radius:10px;padding:10px 12px;color:var(--ink);cursor:pointer}
+.list button b{font-family:var(--num);font-size:18px;letter-spacing:.08em;grid-row:span 2;align-self:center;color:var(--court)}
+.list button small{color:var(--sub);font-size:12px}
+
+/* 上のバー */
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding-top:calc(10px + env(safe-area-inset-top,0px));padding-bottom:8px;margin-inline:-16px;padding-inline:16px;border-bottom:1px solid var(--line)}
+.top-row{display:flex;align-items:center;gap:8px}
+.top-row .ttl{flex:1;min-width:0}
+.top-row h1{margin:0;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{font-size:12px;color:var(--sub)}
+.codepill{display:flex;align-items:center;gap:6px;border:1px solid var(--court);background:var(--court-soft);color:var(--court);border-radius:10px;padding:4px 8px;font:inherit;cursor:pointer}
+.codepill span{font-size:10px;line-height:1.15}
+.codepill b{font-family:var(--num);font-size:19px;letter-spacing:.06em}
+.iconbtn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;min-height:40px;padding:4px 10px;cursor:pointer}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;background:var(--rest);border-radius:10px;padding:3px}
+.tabs button{border:0;background:transparent;border-radius:8px;padding:9px 4px;font:inherit;font-size:14px;color:var(--sub);cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--court);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.share{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
+.qr{background:#fff;padding:8px;border-radius:8px;line-height:0}
+.url{font-size:13px;word-break:break-all;background:var(--rest);border-radius:6px;padding:6px 8px}
+.lock{background:var(--goal-soft);border-color:var(--goal)}
+
+/* ステッパー */
+.step{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;min-height:44px;background:var(--card)}
+.step button{border:0;background:var(--rest);color:var(--ink);font-size:20px;width:44px;align-self:stretch;cursor:pointer}
+.step span{flex:1;text-align:center;font-family:var(--num);font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.step span small{font-family:var(--jp);font-size:12px;font-weight:400;color:var(--sub);margin-left:2px}
+.step.ov{border-color:var(--goal)}
+.step.ov span{color:var(--goal)}
+.team-line{display:flex;gap:8px;align-items:center}
+.team-line .no{font-family:var(--num);font-weight:700;color:var(--sub);width:22px;text-align:right}
+.team-line button{flex:0 0 44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--rest);color:var(--sub);font-size:18px;cursor:pointer}
+.confirm{background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+
+/* 直す：カード */
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sum div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.sum b{display:block;font-family:var(--num);font-size:24px;line-height:1.1;font-variant-numeric:tabular-nums}
+.sum span{font-size:12px;color:var(--sub)}
+.sum .bad b{color:var(--warn)}
+.slot{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.slot.event{background:var(--event)}
+.slot-head{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px;border-bottom:1px solid var(--line)}
+.slot.event .slot-head{border-color:transparent}
+.slot-no{font-family:var(--num);font-weight:700;font-size:15px;background:var(--court);color:var(--court-ink);border-radius:6px;min-width:28px;text-align:center;padding:1px 6px}
+.slot.event .slot-no{background:var(--event-ink);color:var(--event)}
+.slot-time{font-family:var(--num);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.pin{font-family:var(--jp);font-size:11px;font-weight:700;color:var(--goal);border:1px solid var(--goal);border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:3px}
+.slot-head .more{margin-left:auto;width:44px;height:40px;border:0;border-radius:8px;background:transparent;color:var(--sub);font-size:22px;cursor:pointer}
+.slot-head .more[aria-expanded="true"]{background:var(--rest);color:var(--ink)}
+.slot-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:10px}
+.court{display:grid;grid-template-columns:26px 1fr auto 1fr;gap:6px;align-items:center}
+.cl{font-family:var(--num);font-weight:700;font-size:14px;color:var(--court);text-align:center;border:1.5px solid var(--court);border-radius:50%;width:26px;height:26px;line-height:23px}
+.court .vs{font-size:12px;color:var(--sub)}
+.court select{min-width:0}
+.warn{color:var(--warn);font-size:12px;font-weight:700;grid-column:2/-1;margin-top:-2px}
+.rest{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:13px;color:var(--sub)}
+.chip{background:var(--rest);color:var(--ink);border-radius:999px;padding:2px 10px;font-size:13px}
+.times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.times .lbl{font-size:12px;color:var(--sub);margin-bottom:2px}
+.menu{background:var(--rest);padding:10px 12px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.menu .row-btns .btn{flex:1 1 40%}
+.note{font-size:13px;color:var(--sub)}
+
+/* 見る：カード */
+.vcard{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start}
+.vcard.event{background:var(--event)}
+.vcard.now{border:2px solid var(--now-ink);background:var(--now)}
+.vt{min-width:62px;font-family:var(--num);font-weight:700;font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums;text-align:right}
+.vt small{display:block;font-size:14px;color:var(--sub);font-weight:500}
+.vm{display:flex;flex-direction:column;gap:4px;min-width:0}
+.vgame{display:flex;align-items:center;gap:6px;font-weight:700;font-size:17px;flex-wrap:wrap}
+.vgame .vs{font-weight:400;color:var(--sub);font-size:13px}
+.vgame.mine,.vrest .mine{color:var(--goal)}
+.vlabel{font-weight:700;color:var(--event-ink);font-size:17px}
+.badge{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:var(--now-ink);color:var(--card)}
+.badge.next{background:var(--court)}
+.filter{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.filter button{flex:0 0 auto;font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.filter button.on{background:var(--court);border-color:var(--court);color:var(--court-ink)}
+
+/* 表 */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:center;white-space:nowrap}
+th{background:var(--court-soft);font-size:12px;color:var(--sub);font-weight:700}
+td.t{font-family:var(--num);font-weight:700;font-size:16px;font-variant-numeric:tabular-nums}
+td.team{font-weight:700}
+td.vs{color:var(--sub);font-size:12px;padding-inline:2px}
+td.restc{color:var(--sub);font-size:13px}
+tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
+.sheet-title{font-size:18px;font-weight:700;text-align:center;margin:4px 0 0}
+#grid td{font-size:12px;padding:5px 6px}
+#grid th.tn,#grid td.tn{text-align:left;position:sticky;left:0;background:var(--card);font-weight:700;font-size:13px;z-index:1}
+#grid th.tn{background:var(--court-soft)}
+#grid td.play{background:var(--court-soft)}
+#grid td.off{color:var(--sub)}
+#grid td.back{box-shadow:inset 0 0 0 2px var(--warn)}
+#stats td:first-child{text-align:left;font-weight:700}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:10}
+@media (prefers-reduced-motion:no-preference){.tabs button{transition:background .15s}}
+
+@media print{
+  @page{size:A4 portrait;margin:12mm}
+  :root{color-scheme:light;--card:#fff;--ink:#000;--sub:#333;--line:#777;--court-soft:#e3edf9;--event:#fff4cc;--event-ink:#000;--rest:#eee;--warn:#b42318}
+  body{background:#fff;color:#000;font-size:12px}
+  .noprint,.top,#gate{display:none!important}
+  .wrap{padding:0;max-width:none}
+  #pane-print{display:flex!important;padding:0}
+  .scroll{border:0;overflow:visible;border-radius:0}
+  th,td{border:1px solid #777;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  table{font-size:14px}
+  #grid td{font-size:11px}
+  #grid th.tn,#grid td.tn{position:static}
+  .sheet-title{font-size:20px}
+  #gridWrap.off{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 入口 -->
+  <div id="gate" class="gate" hidden>
+    <h1><span class="mark" aria-hidden="true"></span>ハンドボール進行表</h1>
+    <p class="lead">練習試合の進行表を作って、番号で共有します。チーム数・コート面数・試合ごとの時間を変えられ、空きのチームもわかります。</p>
+    <form id="openForm" class="panel">
+      <label class="f" for="codeInput">進行表番号（6けた）</label>
+      <div class="inrow codebox">
+        <input id="codeInput" type="tel" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="000000">
+        <button class="btn primary" type="submit">開く</button>
+      </div>
+      <p id="openMsg" class="msg" hidden></p>
+      <div id="recent" class="list"></div>
+    </form>
+    <div class="or">先生用</div>
+    <form id="findForm" class="panel">
+      <b>管理番号で進行表を探す</b>
+      <p class="hint">管理番号を入れると、その番号で作った進行表の一覧が出ます。</p>
+      <div class="inrow">
+        <label class="f" for="findPin">管理番号<input id="findPin" type="tel" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="0000"></label>
+        <button class="btn primary" type="submit">探す</button>
+      </div>
+      <p id="findMsg" class="msg" hidden></p>
+      <div id="findList" class="list"></div>
+    </form>
+    <div class="panel">
+      <b>新しい進行表を作る</b>
+      <p class="hint">進行表番号は自動で決まります。管理番号は先生だけが知る番号（4〜8けた）で、進行表を直すときと、作った進行表を探すときに使います。毎回同じ番号にしておくと、あとで一覧から開けます。ソフトテニスのリーグ対戦表と同じ番号にしてもかまいません。</p>
+      <div class="inrow">
+        <label class="f" for="newPin">管理番号<input id="newPin" type="tel" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="0000"></label>
+        <button id="createBtn" class="btn primary" type="button">作る</button>
+      </div>
+      <p id="createMsg" class="msg" hidden></p>
+    </div>
+    <button id="localBtn" class="btn link" type="button">番号を使わず、この端末だけで使う</button>
+  </div>
+
+  <!-- 進行表の画面 -->
+  <div id="app" hidden>
+    <div class="top">
+      <div class="top-row">
+        <div class="ttl"><h1 id="hTitle">ハンドボール進行表</h1><div class="status" id="status"></div></div>
+        <button id="shareBtn" class="codepill" type="button" hidden aria-label="進行表番号を知らせる（QRコード）"><span>進行表<br>番号</span><b id="codeText"></b></button>
+        <button id="leaveBtn" class="iconbtn" type="button">切替</button>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button data-tab="view" id="tab-view">見る</button>
+        <button data-tab="edit" id="tab-edit">直す</button>
+        <button data-tab="print" id="tab-print">印刷・Excel</button>
+      </nav>
+    </div>
+
+    <div id="sharePanel" class="panel share noprint" hidden style="margin-top:12px">
+      <div class="qr" id="qr"></div>
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
+        <p style="margin:0">このQRコードを読むか、進行表番号 <b id="shareCode"></b> を入れると開けます。</p>
+        <div class="url" id="shareUrl"></div>
+        <div class="row-btns"><button class="btn small" id="copyBtn" type="button">URLをコピー</button></div>
+        <p class="hint">番号を知っている人は進行表を見られます。直せるのは管理番号を知っている人だけです。</p>
+      </div>
+    </div>
+
+    <!-- 見る -->
+    <section id="pane-view" hidden>
+      <div class="filter" id="filter"></div>
+      <div id="vlist" style="display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+
+    <!-- 直す -->
+    <section id="pane-edit" hidden>
+      <div id="lockView" class="panel lock" hidden>
+        <b>管理番号を入れてください</b>
+        <p class="hint">進行表を直せるのは、作った先生（管理番号を知っている人）だけです。</p>
+        <form id="pinForm" class="inrow">
+          <input id="pinInput" type="tel" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="0000" aria-label="管理番号">
+          <button class="btn primary" type="submit">開く</button>
+        </form>
+        <p id="pinMsg" class="msg" hidden></p>
+      </div>
+      <div id="editView" style="display:flex;flex-direction:column;gap:12px">
+        <div class="panel">
+          <div class="grid2">
+            <label class="f" style="grid-column:1/-1">表のタイトル<input id="title"></label>
+            <label class="f">日付<input id="date" type="date"></label>
+            <label class="f">開始時刻<input id="start" type="time"></label>
+            <div class="f"><span class="hint">1試合の時間</span><div class="step" id="st-dur"></div></div>
+            <div class="f"><span class="hint">次の試合までの間</span><div class="step" id="st-gap"></div></div>
+            <div class="f"><span class="hint">コート面数</span><div class="step" id="st-courts"></div></div>
+            <div class="f"><span class="hint">総当たりの回数</span><div class="step" id="st-cycles"></div></div>
+          </div>
+          <p class="hint">試合時間と間は、下のカードで1試合ずつ変えられます（変えたところはオレンジ）。</p>
+        </div>
+        <details class="panel" id="teamPanel">
+          <summary><b>チーム（<span id="teamCount"></span>）と組み合わせ</b></summary>
+          <div id="teamList" style="display:flex;flex-direction:column;gap:8px"></div>
+          <button class="btn" id="addTeam" type="button">＋ チームを追加</button>
+          <p class="hint">「組み合わせを作る」で、全チームが総当たりになるように並べます。同じチームが続けて出る「連戦」がいちばん少ない並びを選びます。</p>
+          <div id="genArea"></div>
+        </details>
+        <div class="sum" id="sum"></div>
+        <div id="slots" style="display:flex;flex-direction:column;gap:10px"></div>
+        <div class="row-btns">
+          <button class="btn" id="addMatch" type="button">＋ 試合を追加</button>
+          <button class="btn" id="addEvent" type="button">＋ 特別枠を追加</button>
+        </div>
+        <h2>チーム別の試合数</h2>
+        <div class="scroll"><table id="stats"></table></div>
+        <p class="hint">「連戦」は前の試合に続けて出る回数です。</p>
+        <div class="panel" id="dangerPanel">
+          <b>この進行表を消す</b>
+          <p class="hint" id="deleteHint"></p>
+          <div id="deleteArea"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 印刷・Excel -->
+    <section id="pane-print" hidden>
+      <div class="row-btns noprint">
+        <button class="btn primary" id="printBtn" type="button">印刷する</button>
+        <button class="btn goal" id="excelBtn" type="button">Excelで保存</button>
+      </div>
+      <label class="noprint" style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="showGrid" style="width:auto;min-height:0" checked>チーム別の動きも印刷する</label>
+      <p class="sheet-title" id="sheetTitle"></p>
+      <div class="scroll"><table id="sheet"></table></div>
+      <div id="gridWrap" style="display:flex;flex-direction:column;gap:8px">
+        <h2>チーム別の動き</h2>
+        <div class="scroll"><table id="grid"></table></div>
+        <p class="hint">色つきは試合、「空き」は休み。赤枠は連戦です。</p>
+      </div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module">
+const firebaseConfig = {
+  apiKey: 'AIzaSyCzxuZbLIhAKYIWGI5Q7vMscumtzwdxF0U',
+  authDomain: 'kissa-register.firebaseapp.com',
+  projectId: 'kissa-register',
+  storageBucket: 'kissa-register.firebasestorage.app',
+  messagingSenderId: '39499958848',
+  appId: '1:39499958848:web:1a8ba8004dc4611c1cada5'
+};
+const LS_LOCAL = 'hb-schedule-local', LS_LAST = 'hb-schedule-last', LS_RECENT = 'hb-schedule-recent', LS_PREFS = 'hb-schedule-prefs';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const lsGet = (k, d) => { try { const t = localStorage.getItem(k); return t ? JSON.parse(t) : d; } catch (e) { return d; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const lsDel = k => { try { localStorage.removeItem(k); } catch (e) {} };
+function hashPin(code, pin) { let h = 2166136261; for (const c of `hb:${code}:${pin}`) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
+let toastTimer;
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 2000); }
+const CL = n => String.fromCharCode(65 + n);
+
+// ---------- データ ----------
+const mk = (games = []) => ({ id: nextId(), kind: 'match', dur: null, gap: null, fix: '', label: '', note: '', games });
+const ev = (label = '', dur = null) => ({ id: nextId(), kind: 'event', dur, gap: null, fix: '', label, note: '', games: [] });
+let idSeq = 1;
+function nextId() { if (S && S.rows) idSeq = Math.max(idSeq, ...S.rows.map(r => r.id + 1)); return idSeq++; }
+function sampleDoc() {
+  S = null; idSeq = 1;
+  const d = { app: 'handball-schedule', v: 1, title: '練習試合（例）', date: '', start: '09:30', dur: 20, gap: 5, courts: 1, cycles: 2,
+    teams: ['A高', 'B高', 'C高'], rows: [], pinHash: null };
+  const m = (a, b) => mk([[a, b]]);
+  d.rows = [m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高'), ev('1年生', 15), m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高'), ev('1年生', 15)];
+  return d;
+}
+let S = null, mode = null, code = null;
+let prefs = Object.assign({ tab: 'view', focus: '', grid: true }, lsGet(LS_PREFS, {}));
+const savePrefs = () => lsSet(LS_PREFS, prefs);
+let openRow = null, confirmGen = false, confirmDel = false;
+
+// ---------- 計算 ----------
+const toMin = s => { const [h, m] = String(s || '9:00').split(':').map(Number); return h * 60 + m; };
+const fmt = m => Math.floor(m / 60) + ':' + String(((m % 60) + 60) % 60).padStart(2, '0');
+const eff = (v, d) => (v === null || v === undefined || v === '') ? d : Number(v);
+const teams = () => [...new Set((S.teams || []).map(t => String(t).trim()).filter(Boolean))];
+function compute() {
+  const T = teams();
+  let t = toMin(S.start), prev = null;
+  S.rows.forEach((r, i) => {
+    if (r.kind === 'match') { r.games = r.games || []; while (r.games.length < S.courts) r.games.push(['', '']); }
+    if (r.fix) t = toMin(r.fix);
+    r._no = i + 1; r._s = t; r._e = t + eff(r.dur, S.dur);
+    t = r._e + eff(r.gap, S.gap);
+    if (r.kind === 'match') {
+      const playing = r.games.slice(0, S.courts).flat().filter(Boolean);
+      r._playing = new Set(playing);
+      r._rest = T.filter(x => !r._playing.has(x));
+      r._back = prev && prev.kind === 'match' ? playing.filter(x => prev._playing.has(x)) : [];
+      r._dup = playing.filter((x, k) => playing.indexOf(x) !== k);
+    }
+    prev = r;
+  });
+}
+function stats() {
+  const res = {};
+  teams().forEach(t => res[t] = { games: 0, rest: 0, back: 0 });
+  S.rows.forEach(r => {
+    if (r.kind !== 'match') return;
+    r.games.slice(0, S.courts).forEach(([a, b]) => { if (res[a] && b) res[a].games++; if (res[b] && a) res[b].games++; });
+    r._rest.forEach(x => res[x].rest++);
+    r._back.forEach(x => res[x] && res[x].back++);
+  });
+  return res;
+}
+// 保存するときは計算用の項目（_で始まる）を落とす
+const clean = d => JSON.parse(JSON.stringify(d, (k, v) => k.startsWith('_') ? undefined : v));
+
+// ---------- 総当たりを組む ----------
+function circleRounds(T) {
+  const a = T.slice(); if (a.length % 2) a.push(null);
+  const n = a.length, out = [];
+  for (let r = 0; r < n - 1; r++) {
+    for (let i = 0; i < n / 2; i++) { const x = a[i], y = a[n - 1 - i]; if (x && y) out.push(r % 2 ? [y, x] : [x, y]); }
+    a.splice(1, 0, a.pop());
+  }
+  return out;
+}
+function buildOnce(T, base, rnd) {
+  let pool = [];
+  for (let c = 0; c < S.cycles; c++) base.forEach((p, k) => pool.push({ a: p[0], b: p[1], c, k: rnd ? Math.random() : -(c * 1000 + k) }));
+  const last = {}, cnt = {};
+  T.forEach(x => { last[x] = -99; cnt[x] = 0; });
+  const slots = [];
+  let slot = 0;
+  while (pool.length) {
+    const used = new Set(), games = [];
+    const minC = Math.min(...pool.map(m => m.c));
+    for (let k = 0; k < S.courts; k++) {
+      const fits = pool.filter(m => !used.has(m.a) && !used.has(m.b));
+      let cand = fits.filter(m => m.c === minC);
+      if (!cand.length) cand = fits;
+      if (!cand.length) break;
+      const score = m => rnd ? [Math.min(slot - last[m.a], slot - last[m.b], 2), Math.random(), 0] : [Math.min(slot - last[m.a], slot - last[m.b], 3), -(cnt[m.a] + cnt[m.b]), m.k];
+      cand.sort((p, q) => { const x = score(p), y = score(q); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i]; return 0; });
+      const m = cand[0];
+      games.push([m.a, m.b]); used.add(m.a); used.add(m.b);
+      pool = pool.filter(z => z !== m);
+    }
+    if (!games.length) break;
+    games.forEach(([a, b]) => { last[a] = last[b] = slot; cnt[a]++; cnt[b]++; });
+    slots.push(games); slot++;
+  }
+  let back = 0, triple = 0;
+  const prev = [new Set(), new Set()];
+  slots.forEach(g => {
+    const now = new Set(g.flat());
+    now.forEach(x => { if (prev[0].has(x)) { back++; if (prev[1].has(x)) triple++; } });
+    prev[1] = prev[0]; prev[0] = now;
+  });
+  return { slots, cost: slots.length * 100000 + triple * 1000 + back * 10 };
+}
+function generate() {
+  const T = teams(), base = circleRounds(T);
+  let best = buildOnce(T, base, false);
+  const t0 = Date.now();
+  while (best.cost % 100000 && Date.now() - t0 < 600) { const t = buildOnce(T, base, true); if (t.cost < best.cost) best = t; }
+  S.rows = [];
+  S.rows = best.slots.map(g => mk(g.slice()));
+}
+
+// ---------- 保存・共有（Firebase） ----------
+let FB = null, docRef = null, unsub = null, saveTimer = null, dirty = false;
+async function loadFirebase() {
+  if (FB) return FB;
+  const [app, auth, fs] = await Promise.all([
+    import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js'),
+    import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js'),
+    import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js')
+  ]);
+  const a = app.initializeApp(firebaseConfig);
+  await auth.signInAnonymously(auth.getAuth(a));
+  FB = { ...fs, db: fs.getFirestore(a) };
+  return FB;
+}
+const refFor = c => FB.doc(FB.db, 'events', 'hb-' + c, 'state', 'schedule');
+const ownerRef = pin => FB.doc(FB.db, 'events', 'hb-own-' + hashPin('owner', pin) + pin.length, 'state', 'list');
+const status = t => { $('status').textContent = t; };
+
+function save() {
+  if (mode === 'local') { lsSet(LS_LOCAL, clean(S)); return; }
+  if (mode !== 'cloud') return;
+  dirty = true; status('保存中…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flush, 600);
+  updateOwnedLater();
+}
+function flush() {
+  if (mode !== 'cloud' || !dirty) return;
+  dirty = false;
+  FB.setDoc(docRef, clean(S)).then(() => status('保存しました')).catch(e => status('保存できませんでした。通信を確認してください（' + e.code + '）'));
+}
+function remember(c, title) {
+  const r = lsGet(LS_RECENT, []).filter(x => x.code !== c); r.unshift({ code: c, title: title || '' }); lsSet(LS_RECENT, r.slice(0, 6));
+}
+const isAdmin = () => mode === 'local' || (S && S.pinHash && lsGet('hb-admin-' + code, null) === S.pinHash);
+
+let pendingPin = null;
+async function openCloud(c) {
+  $('openMsg').hidden = true;
+  try { await loadFirebase(); } catch (e) { return gateMsg('openMsg', '共有データに接続できませんでした。インターネット接続を確認してください。'); }
+  if (unsub) unsub();
+  docRef = refFor(c);
+  let first = true;
+  unsub = FB.onSnapshot(docRef, snap => {
+    if (!snap.exists()) {
+      if (first) return gateMsg('openMsg', `進行表番号 ${c} は見つかりません。番号を確かめてください。`);
+      toast('この進行表は削除されました'); return leave();
+    }
+    if (snap.metadata.hasPendingWrites || (!first && dirty)) return;
+    S = snap.data();
+    if (first) {
+      first = false; mode = 'cloud'; code = c; lsSet(LS_LAST, c); remember(c, S.title);
+      if (pendingPin && hashPin(c, pendingPin) === S.pinHash) { lsSet('hb-admin-' + c, S.pinHash); lsSet('hb-pin-' + c, pendingPin); }
+      pendingPin = null; showApp();
+    } else { render(false); status('ほかの端末の変更を反映しました'); }
+  }, e => {
+    if (first) gateMsg('openMsg', '共有データを読めませんでした（' + e.code + '）');
+    else status('接続が切れました。ページを開き直してください（' + e.code + '）');
+  });
+}
+async function createCloud(pin) {
+  try { await loadFirebase(); } catch (e) { return gateMsg('createMsg', '共有データに接続できませんでした。インターネット接続を確認してください。'); }
+  let c = null;
+  for (let t = 0; t < 8; t++) {
+    const cand = String(100000 + Math.floor(Math.random() * 900000));
+    const s = await FB.getDoc(refFor(cand)).catch(() => null);
+    if (s && !s.exists()) { c = cand; break; }
+  }
+  if (!c) return gateMsg('createMsg', '進行表番号を用意できませんでした。もう一度お試しください。');
+  const d = sampleDoc();
+  d.title = '練習試合'; d.pinHash = hashPin(c, pin); d.createdAt = Date.now();
+  try { await FB.setDoc(refFor(c), clean(d)); } catch (e) { return gateMsg('createMsg', '進行表を作れませんでした（' + e.code + '）'); }
+  lsSet('hb-admin-' + c, d.pinHash); lsSet('hb-pin-' + c, pin);
+  await registerOwned(pin, c, d);
+  prefs.tab = 'edit'; savePrefs();
+  openCloud(c);
+}
+async function registerOwned(pin, c, d) {
+  try { await FB.setDoc(ownerRef(pin), { items: { [c]: { title: d.title || '', date: d.date || '', createdAt: d.createdAt || Date.now() } } }, { merge: true }); }
+  catch (e) { status('管理番号の一覧に載せられませんでした（' + e.code + '）'); }
+}
+let regTimer = null, lastReg = '';
+function updateOwnedLater() {
+  const pin = mode === 'cloud' && lsGet('hb-pin-' + code, null); if (!pin) return;
+  const key = S.title + '|' + S.date; if (key === lastReg) return;
+  clearTimeout(regTimer); regTimer = setTimeout(() => { lastReg = key; registerOwned(pin, code, S); }, 1500);
+}
+$('findForm').onsubmit = async e => {
+  e.preventDefault();
+  const pin = $('findPin').value.replace(/\D/g, ''), m = $('findMsg'), list = $('findList');
+  m.hidden = true; list.innerHTML = '';
+  if (pin.length < 4 || pin.length > 8) { m.textContent = '管理番号は4〜8けたの数字です。'; m.hidden = false; return; }
+  try { await loadFirebase(); } catch (err) { m.textContent = '共有データに接続できませんでした。'; m.hidden = false; return; }
+  let items = {};
+  try { const snap = await FB.getDoc(ownerRef(pin)); if (snap.exists()) items = snap.data().items || {}; }
+  catch (err) { m.textContent = '一覧を読めませんでした（' + err.code + '）'; m.hidden = false; return; }
+  const arr = Object.entries(items).sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0));
+  if (!arr.length) { m.textContent = 'この管理番号で作った進行表は見つかりません。'; m.hidden = false; return; }
+  const day = t => { if (!t) return ''; const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} 作成`; };
+  list.innerHTML = arr.map(([c, x]) => `<button type="button" data-own="${c}"><b>${c}</b><span>${esc(x.title || '（タイトルなし）')}</span><small>${esc([x.date, day(x.createdAt)].filter(Boolean).join('　'))}</small></button>`).join('');
+  list.querySelectorAll('[data-own]').forEach(b => b.onclick = () => { pendingPin = pin; openCloud(b.dataset.own); });
+};
+function openLocal() {
+  if (unsub) { unsub(); unsub = null; }
+  mode = 'local'; code = null; S = lsGet(LS_LOCAL, null) || sampleDoc(); lsSet(LS_LOCAL, clean(S)); lsSet(LS_LAST, 'local'); showApp();
+}
+function leave() {
+  if (unsub) { unsub(); unsub = null; }
+  flush(); S = null; mode = null; code = null; lsDel(LS_LAST);
+  history.replaceState(null, '', location.pathname);
+  showGate();
+}
+function gateMsg(id, t) { showGate(); const m = $(id); m.textContent = t; m.hidden = false; }
+
+// ---------- 入口 ----------
+function showGate() {
+  $('app').hidden = true; $('gate').hidden = false;
+  const r = lsGet(LS_RECENT, []);
+  $('recent').innerHTML = r.length ? `<span class="hint">最近開いた進行表</span>` + r.map(x => `<button type="button" data-open="${x.code}"><b>${x.code}</b><span>${esc(x.title || '（タイトルなし）')}</span></button>`).join('') : '';
+  $('recent').querySelectorAll('[data-open]').forEach(b => b.onclick = () => openCloud(b.dataset.open));
+}
+$('openForm').onsubmit = e => { e.preventDefault(); const c = $('codeInput').value.replace(/\D/g, ''); if (c.length !== 6) return gateMsg('openMsg', '進行表番号は6けたの数字です。'); openCloud(c); };
+$('createBtn').onclick = () => { const p = $('newPin').value.replace(/\D/g, ''); if (p.length < 4 || p.length > 8) return gateMsg('createMsg', '管理番号は4〜8けたの数字にしてください。'); $('createMsg').hidden = true; createCloud(p); };
+$('localBtn').onclick = openLocal;
+$('leaveBtn').onclick = leave;
+
+// ---------- 画面 ----------
+function showApp() {
+  $('gate').hidden = true; $('app').hidden = false;
+  if (mode === 'cloud') history.replaceState(null, '', location.pathname + '#' + code);
+  $('shareBtn').hidden = mode !== 'cloud';
+  $('sharePanel').hidden = true;
+  if (mode === 'cloud') $('codeText').textContent = code;
+  status(mode === 'local' ? 'この端末だけに保存' : (isAdmin() ? '' : '見るだけ（直すには管理番号）'));
+  if (!isAdmin() && prefs.tab === 'edit') prefs.tab = 'view';
+  openRow = null; confirmGen = false; confirmDel = false;
+  render(false);
+}
+function render(doSave = true) {
+  if (!S) return;
+  compute();
+  $('hTitle').textContent = S.title || 'ハンドボール進行表';
+  ['view', 'edit', 'print'].forEach(k => { $('pane-' + k).hidden = prefs.tab !== k; $('tab-' + k).classList.toggle('on', prefs.tab === k); });
+  if (prefs.tab === 'view') renderView();
+  if (prefs.tab === 'edit') renderEdit();
+  renderPrint();
+  if (doSave) save();
+}
+function stepper(el, key, val, unit) {
+  el.innerHTML = `<button type="button" aria-label="へらす" data-step="${key}" data-d="-1">−</button><span>${val}<small>${unit}</small></span><button type="button" aria-label="ふやす" data-step="${key}" data-d="1">＋</button>`;
+}
+function teamOpts(val) {
+  const T = teams();
+  let o = `<option value="">—</option>`;
+  if (val && !T.includes(val)) o += `<option selected>${esc(val)}</option>`;
+  T.forEach(t => o += `<option ${t === val ? 'selected' : ''}>${esc(t)}</option>`);
+  return o;
+}
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function renderView() {
+  const T = teams(), C = S.courts, f = T.includes(prefs.focus) ? prefs.focus : '';
+  $('filter').innerHTML = `<button type="button" data-focus="" class="${f ? '' : 'on'}">全部</button>` + T.map(t => `<button type="button" data-focus="${esc(t)}" class="${t === f ? 'on' : ''}">${esc(t)}</button>`).join('');
+  const isToday = S.date && S.date === todayStr();
+  const now = new Date(), nm = now.getHours() * 60 + now.getMinutes();
+  let nowIdx = -1, nextIdx = -1;
+  if (isToday) {
+    nowIdx = S.rows.findIndex(r => nm >= r._s && nm < r._e);
+    nextIdx = S.rows.findIndex(r => r._s > nm);
+  }
+  $('vlist').innerHTML = S.rows.map((r, i) => {
+    const cls = ['vcard', r.kind, i === nowIdx ? 'now' : ''].join(' ');
+    const badge = i === nowIdx ? `<span class="badge">いま</span>` : i === nextIdx ? `<span class="badge next">次</span>` : '';
+    let body;
+    if (r.kind === 'event') body = `<div class="vlabel">${esc(r.label || '（特別枠）')} ${badge}</div>`;
+    else {
+      const gs = r.games.slice(0, C).map(([a, b], c) => (a || b) ? `<div class="vgame ${f && (a === f || b === f) ? 'mine' : ''}">${C > 1 ? `<span class="cl">${CL(c)}</span>` : ''}${esc(a)}<span class="vs">対</span>${esc(b)}</div>` : '').join('');
+      body = `${badge ? `<div>${badge}</div>` : ''}${gs}<div class="rest vrest">空き ${r._rest.length ? r._rest.map(x => `<span class="chip ${x === f ? 'mine' : ''}">${esc(x)}</span>`).join('') : 'なし'}</div>`;
+    }
+    if (r.note) body += `<div class="note">${esc(r.note)}</div>`;
+    return `<div class="${cls}"><div class="vt">${fmt(r._s)}<small>〜${fmt(r._e)}</small></div><div class="vm">${body}</div></div>`;
+  }).join('') || `<p class="hint">まだ試合がありません。</p>`;
+}
+
+function renderEdit() {
+  const admin = isAdmin();
+  $('lockView').hidden = admin; $('editView').hidden = !admin;
+  if (!admin) return;
+  const C = S.courts, st = stats(), T = teams();
+  $('title').value = S.title || ''; $('date').value = S.date || ''; $('start').value = S.start;
+  stepper($('st-dur'), 'dur', S.dur, '分'); stepper($('st-gap'), 'gap', S.gap, '分');
+  stepper($('st-courts'), 'courts', S.courts, '面'); stepper($('st-cycles'), 'cycles', S.cycles, '回');
+  $('teamCount').textContent = T.length + 'チーム';
+  $('teamList').innerHTML = S.teams.map((t, i) => `<div class="team-line"><span class="no">${i + 1}</span><input id="team-${i}" data-team="${i}" value="${esc(t)}" placeholder="チーム名"><button type="button" data-delteam="${i}" aria-label="削除">×</button></div>`).join('');
+  $('genArea').innerHTML = confirmGen
+    ? `<div class="confirm"><b>今の進行表を作り直しますか？</b><span class="hint">手で直した対戦・時間・特別枠は消えます。</span><div class="row-btns"><button type="button" class="btn primary" id="genYes">作り直す</button><button type="button" class="btn" id="genNo">やめる</button></div></div>`
+    : `<button type="button" class="btn primary" id="gen" ${T.length < 2 ? 'disabled' : ''}>組み合わせを作る（${T.length}チーム・${S.courts}面・${S.cycles}回）</button>`;
+
+  const games = S.rows.filter(r => r.kind === 'match').reduce((n, r) => n + r.games.slice(0, C).filter(g => g[0] && g[1]).length, 0);
+  const backs = Object.values(st).reduce((a, s) => a + s.back, 0);
+  const end = S.rows.length ? fmt(S.rows[S.rows.length - 1]._e) : '—';
+  $('sum').innerHTML = `<div><b>${games}</b><span>試合</span></div><div><b>${end}</b><span>終了</span></div><div class="${backs ? 'bad' : ''}"><b>${backs}</b><span>連戦</span></div>`;
+
+  $('slots').innerHTML = S.rows.map((r, i) => {
+    const open = openRow === r.id, durOv = r.dur !== null, gapOv = r.gap !== null;
+    let h = `<article class="slot ${r.kind}">
+      <div class="slot-head"><span class="slot-no">${r._no}</span>
+        <span class="slot-time">${fmt(r._s)}–${fmt(r._e)}${r.fix ? '<span class="pin">固定</span>' : ''}</span>
+        <button type="button" class="more" data-menu="${r.id}" aria-expanded="${open}" aria-label="この行の操作">⋯</button></div>`;
+    if (open) h += `<div class="menu">
+        <div class="row-btns"><button type="button" class="btn small" data-op="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>↑ 上へ</button><button type="button" class="btn small" data-op="down" data-i="${i}" ${i === S.rows.length - 1 ? 'disabled' : ''}>↓ 下へ</button></div>
+        <div class="row-btns"><button type="button" class="btn small" data-op="insM" data-i="${i}">＋ 下に試合</button><button type="button" class="btn small" data-op="insE" data-i="${i}">＋ 下に特別枠</button></div>
+        <label class="f">開始時刻を固定（昼休み明けなど。空にすると自動）<input type="time" id="fix-${r.id}" data-f="fix" data-i="${i}" value="${r.fix || ''}"></label>
+        <label class="f">備考<input id="note-${r.id}" data-f="note" data-i="${i}" value="${esc(r.note)}" placeholder="例：12分×2"></label>
+        <div class="row-btns">${durOv || gapOv ? `<button type="button" class="btn small" data-op="reset" data-i="${i}">時間を全体の設定に戻す</button>` : ''}<button type="button" class="btn small danger" data-op="del" data-i="${i}">この行を削除</button></div>
+      </div>`;
+    h += `<div class="slot-body">`;
+    if (r.kind === 'event') h += `<input id="label-${r.id}" data-f="label" data-i="${i}" value="${esc(r.label)}" placeholder="例：1年生・昼休み・開会式">`;
+    else {
+      for (let c = 0; c < C; c++) {
+        const [a, b] = r.games[c];
+        const warn = [a, b].filter(x => x && r._back.includes(x));
+        const dup = (a && a === b) || [a, b].some(x => x && r._dup.includes(x));
+        h += `<div class="court"><span class="cl">${CL(c)}</span>
+          <select id="g-${r.id}-${c}-0" data-i="${i}" data-g="${c}" data-s="0" aria-label="${CL(c)}コート 1チーム目">${teamOpts(a)}</select><span class="vs">対</span>
+          <select id="g-${r.id}-${c}-1" data-i="${i}" data-g="${c}" data-s="1" aria-label="${CL(c)}コート 2チーム目">${teamOpts(b)}</select>
+          ${warn.length ? `<span class="warn">連戦：${warn.map(esc).join('・')}</span>` : ''}
+          ${dup ? `<span class="warn">同じチームが2か所に入っています</span>` : ''}</div>`;
+      }
+      h += `<div class="rest">空き ${r._rest.length ? r._rest.map(x => `<span class="chip">${esc(x)}</span>`).join('') : '<span>なし</span>'}</div>`;
+    }
+    h += `<div class="times">
+        <div><div class="lbl">${r.kind === 'event' ? '時間' : '試合時間'}</div><div class="step ${durOv ? 'ov' : ''}"><button type="button" data-rstep="dur" data-i="${i}" data-d="-1" aria-label="へらす">−</button><span>${eff(r.dur, S.dur)}<small>分</small></span><button type="button" data-rstep="dur" data-i="${i}" data-d="1" aria-label="ふやす">＋</button></div></div>
+        <div><div class="lbl">次までの間</div><div class="step ${gapOv ? 'ov' : ''}"><button type="button" data-rstep="gap" data-i="${i}" data-d="-1" aria-label="へらす">−</button><span>${eff(r.gap, S.gap)}<small>分</small></span><button type="button" data-rstep="gap" data-i="${i}" data-d="1" aria-label="ふやす">＋</button></div></div>
+      </div>`;
+    if (r.note && !open) h += `<div class="note">備考：${esc(r.note)}</div>`;
+    return h + `</div></article>`;
+  }).join('') || `<p class="hint">「チームと組み合わせ」を開いて「組み合わせを作る」を押すか、下のボタンで追加してください。</p>`;
+
+  $('stats').innerHTML = `<tr><th>チーム</th><th>試合</th><th>空き</th><th>連戦</th></tr>` +
+    T.map(t => `<tr><td>${esc(t)}</td><td>${st[t].games}</td><td>${st[t].rest}</td><td style="${st[t].back ? 'color:var(--warn);font-weight:700' : ''}">${st[t].back}</td></tr>`).join('');
+
+  $('deleteHint').textContent = mode === 'cloud' ? `進行表番号 ${code} のデータをすべて消します。元に戻せません。` : 'この端末に保存した進行表を消して、例の表に戻します。';
+  $('deleteArea').innerHTML = confirmDel
+    ? `<div class="confirm"><b>本当に消しますか？</b><div class="row-btns"><button type="button" class="btn danger" id="delYes">消す</button><button type="button" class="btn" id="delNo">やめる</button></div></div>`
+    : `<button type="button" class="btn danger" id="delBtn">この進行表を消す</button>`;
+}
+
+function renderPrint() {
+  const C = S.courts, T = teams();
+  $('sheetTitle').textContent = [S.title, S.date ? dateJa(S.date) : ''].filter(Boolean).join('　');
+  let h = `<tr><th>番号</th><th>開始</th><th>終了</th>`;
+  for (let c = 0; c < C; c++) h += `<th colspan="3">${C > 1 ? CL(c) + 'コート' : '対戦チーム'}</th>`;
+  h += `<th>空き</th><th>備考</th></tr>`;
+  S.rows.forEach(r => {
+    h += `<tr class="${r.kind}"><td>${r._no}</td><td class="t">${fmt(r._s)}</td><td class="t">${fmt(r._e)}</td>`;
+    if (r.kind === 'event') h += `<td colspan="${C * 3 + 1}">${esc(r.label)}</td>`;
+    else {
+      r.games.slice(0, C).forEach(([a, b]) => {
+        h += a || b ? `<td class="team">${esc(a)}</td><td class="vs">対</td><td class="team">${esc(b)}</td>` : `<td colspan="3" class="restc">—</td>`;
+      });
+      h += `<td class="restc">${r._rest.map(esc).join('・') || '—'}</td>`;
+    }
+    h += `<td class="restc">${esc(r.note)}</td></tr>`;
+  });
+  $('sheet').innerHTML = h;
+  let g = `<tr><th class="tn">チーム</th>${S.rows.map(r => `<th>${r._no}<br>${fmt(r._s)}</th>`).join('')}</tr>`;
+  T.forEach(t => {
+    g += `<tr><td class="tn">${esc(t)}</td>`;
+    S.rows.forEach(r => {
+      if (r.kind === 'event') { g += `<td>${esc(r.label)}</td>`; return; }
+      let cell = null;
+      r.games.slice(0, C).forEach((x, c) => { if (x[0] === t) cell = [x[1], c]; else if (x[1] === t) cell = [x[0], c]; });
+      g += cell ? `<td class="play ${r._back.includes(t) ? 'back' : ''}">対${esc(cell[0])}${C > 1 ? ' ' + CL(cell[1]) : ''}</td>` : `<td class="off">空き</td>`;
+    });
+    g += `</tr>`;
+  });
+  $('grid').innerHTML = g;
+  $('showGrid').checked = prefs.grid;
+  $('gridWrap').classList.toggle('off', !prefs.grid);
+}
+function dateJa(s) { const d = new Date(s + 'T00:00'); if (isNaN(d)) return s; return `${d.getMonth() + 1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`; }
+
+// ---------- 操作 ----------
+const LIM = { courts: [1, 8], dur: [1, 120], gap: [0, 120], cycles: [1, 6] };
+$('tabs').onclick = e => {
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  prefs.tab = b.dataset.tab; savePrefs(); confirmGen = false; confirmDel = false;
+  render(false); window.scrollTo(0, 0);
+};
+$('shareBtn').onclick = () => {
+  const p = $('sharePanel'); p.hidden = !p.hidden; if (p.hidden) return;
+  const url = location.origin + location.pathname + '#' + code;
+  $('shareCode').textContent = code; $('shareUrl').textContent = url;
+  $('qr').innerHTML = '';
+  if (window.QRCode) new QRCode($('qr'), { text: url, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
+};
+$('copyBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText($('shareUrl').textContent); toast('URLをコピーしました'); }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($('shareUrl')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('選んだURLをコピーしてください'); }
+};
+$('pinForm').onsubmit = e => {
+  e.preventDefault();
+  const pin = $('pinInput').value.replace(/\D/g, '');
+  if (hashPin(code, pin) === S.pinHash) {
+    lsSet('hb-admin-' + code, S.pinHash); lsSet('hb-pin-' + code, pin); $('pinInput').value = ''; $('pinMsg').hidden = true;
+    registerOwned(pin, code, S); status(''); render(false); toast('直せるようになりました');
+  } else { $('pinMsg').textContent = '管理番号がちがいます。'; $('pinMsg').hidden = false; }
+};
+$('filter').onclick = e => { const b = e.target.closest('[data-focus]'); if (!b) return; prefs.focus = b.dataset.focus; savePrefs(); render(false); };
+$('showGrid').onchange = e => { prefs.grid = e.target.checked; savePrefs(); render(false); };
+$('printBtn').onclick = () => window.print();
+
+$('editView').addEventListener('click', e => {
+  const t = e.target;
+  const s = t.closest('[data-step]');
+  if (s) { const k = s.dataset.step, [lo, hi] = LIM[k]; S[k] = Math.max(lo, Math.min(hi, S[k] + Number(s.dataset.d))); render(); return; }
+  const d = t.closest('[data-delteam]');
+  if (d) { S.teams.splice(Number(d.dataset.delteam), 1); render(); return; }
+  if (t.id === 'addTeam') { S.teams.push(''); render(false); const inp = $('team-' + (S.teams.length - 1)); inp && inp.focus(); return; }
+  if (t.id === 'gen') { if (S.rows.length) { confirmGen = true; render(false); } else doGen(); return; }
+  if (t.id === 'genYes') { doGen(); return; }
+  if (t.id === 'genNo') { confirmGen = false; render(false); return; }
+  if (t.id === 'delBtn') { confirmDel = true; render(false); return; }
+  if (t.id === 'delNo') { confirmDel = false; render(false); return; }
+  if (t.id === 'delYes') { doDelete(); return; }
+  const m = t.closest('[data-menu]');
+  if (m) { const id = Number(m.dataset.menu); openRow = openRow === id ? null : id; render(false); return; }
+  const rs = t.closest('[data-rstep]');
+  if (rs) {
+    const r = S.rows[rs.dataset.i], k = rs.dataset.rstep, [lo, hi] = LIM[k];
+    r[k] = Math.max(lo, Math.min(hi, eff(r[k], S[k]) + Number(rs.dataset.d)));
+    if (r[k] === S[k]) r[k] = null;
+    render(); return;
+  }
+  const op = t.closest('[data-op]');
+  if (op) {
+    const i = Number(op.dataset.i), R = S.rows;
+    switch (op.dataset.op) {
+      case 'up': if (i > 0) [R[i - 1], R[i]] = [R[i], R[i - 1]]; break;
+      case 'down': if (i < R.length - 1) [R[i + 1], R[i]] = [R[i], R[i + 1]]; break;
+      case 'insM': R.splice(i + 1, 0, mk()); openRow = null; break;
+      case 'insE': R.splice(i + 1, 0, ev()); openRow = null; break;
+      case 'reset': R[i].dur = null; R[i].gap = null; break;
+      case 'del': R.splice(i, 1); openRow = null; toast('行を削除しました'); break;
+    }
+    render(); return;
+  }
+  if (t.id === 'addMatch') { S.rows.push(mk()); render(); }
+  if (t.id === 'addEvent') { S.rows.push(ev()); render(); }
+});
+$('editView').addEventListener('change', e => {
+  const el = e.target;
+  if (el.id === 'title') S.title = el.value;
+  else if (el.id === 'date') S.date = el.value;
+  else if (el.id === 'start') { if (el.value) S.start = el.value; }
+  else if (el.dataset.team !== undefined) {
+    const i = Number(el.dataset.team), old = String(S.teams[i]).trim(), now = el.value.trim();
+    S.teams[i] = now;
+    if (old && now && old !== now) S.rows.forEach(r => (r.games || []).forEach(g => { for (let k = 0; k < 2; k++) if (g[k] === old) g[k] = now; }));
+  } else if (el.dataset.i !== undefined) {
+    const r = S.rows[el.dataset.i]; if (!r) return;
+    if (el.tagName === 'SELECT') r.games[el.dataset.g][el.dataset.s] = el.value;
+    else if (el.dataset.f) r[el.dataset.f] = el.value;
+  } else return;
+  render();
+});
+function doGen() { confirmGen = false; generate(); openRow = null; $('teamPanel').open = false; render(); toast('組み合わせを作りました'); }
+async function doDelete() {
+  confirmDel = false;
+  if (mode === 'local') { S = sampleDoc(); lsSet(LS_LOCAL, clean(S)); render(false); toast('消しました'); return; }
+  try {
+    if (unsub) { unsub(); unsub = null; }
+    await FB.deleteDoc(docRef);
+    const pin = lsGet('hb-pin-' + code, null);
+    if (pin) await FB.setDoc(ownerRef(pin), { items: { [code]: FB.deleteField() } }, { merge: true }).catch(() => {});
+    lsSet(LS_RECENT, lsGet(LS_RECENT, []).filter(x => x.code !== code));
+    toast('消しました'); leave();
+  } catch (e) { status('消せませんでした（' + e.code + '）'); }
+}
+
+$('excelBtn').onclick = () => {
+  if (typeof XLSX === 'undefined') { toast('Excelの部品を読み込めませんでした。開き直してください'); return; }
+  const C = S.courts, T = teams();
+  const head = ['番号', '開始時刻', '終了時刻'];
+  for (let c = 0; c < C; c++) head.push(C > 1 ? CL(c) + 'コート' : '対戦チーム', '', '');
+  head.push('空き', '備考');
+  const aoa = [[$('sheetTitle').textContent], head];
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: head.length - 1 } }];
+  for (let c = 0; c < C; c++) merges.push({ s: { r: 1, c: 3 + c * 3 }, e: { r: 1, c: 5 + c * 3 } });
+  S.rows.forEach((r, i) => {
+    const row = [r._no, fmt(r._s), fmt(r._e)];
+    if (r.kind === 'event') {
+      row.push(r.label); for (let k = 1; k < C * 3 + 1; k++) row.push('');
+      merges.push({ s: { r: i + 2, c: 3 }, e: { r: i + 2, c: 3 + C * 3 } });
+    } else {
+      r.games.slice(0, C).forEach(([a, b]) => row.push(a, a || b ? '対' : '', b));
+      row.push(r._rest.join('・'));
+    }
+    row.push(r.note); aoa.push(row);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+  ws1['!merges'] = merges;
+  ws1['!cols'] = [{ wch: 5 }, { wch: 8 }, { wch: 8 }, ...Array.from({ length: C }, () => [{ wch: 12 }, { wch: 3 }, { wch: 12 }]).flat(), { wch: 18 }, { wch: 14 }];
+  const g = [['チーム', ...S.rows.map(r => `${r._no}（${fmt(r._s)}）`)]];
+  T.forEach(t => g.push([t, ...S.rows.map(r => {
+    if (r.kind === 'event') return r.label;
+    let s = '空き';
+    r.games.slice(0, C).forEach((x, c) => { const o = x[0] === t ? x[1] : x[1] === t ? x[0] : null; if (o !== null) s = '対' + o + (C > 1 ? `（${CL(c)}）` : ''); });
+    return s;
+  })]));
+  const ws2 = XLSX.utils.aoa_to_sheet(g);
+  ws2['!cols'] = [{ wch: 12 }, ...S.rows.map(() => ({ wch: 13 }))];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, '進行表');
+  XLSX.utils.book_append_sheet(wb, ws2, 'チーム別');
+  XLSX.writeFile(wb, ((S.date ? S.date.replace(/-/g, '') + ' ' : '') + (S.title || '進行表')).replace(/[\\/:*?"<>|]/g, '_') + '.xlsx');
+};
+
+// 「いま」の表示を1分ごとに更新
+setInterval(() => { if (S && prefs.tab === 'view' && S.date === todayStr()) renderView(); }, 60000);
+window.addEventListener('pagehide', flush);
+
+// ---------- 起動 ----------
+const hashCode = location.hash.replace(/\D/g, '');
+if (hashCode.length === 6) openCloud(hashCode);
+else {
+  const last = lsGet(LS_LAST, null);
+  if (last === 'local') openLocal();
+  else if (last && String(last).length === 6) openCloud(String(last));
+  else showGate();
+}
+</script>
+</body>
+</html>
