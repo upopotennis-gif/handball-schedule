@@ -316,6 +316,7 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
           <div id="teamList" style="display:flex;flex-direction:column;gap:8px"></div>
           <button class="btn" id="addTeam" type="button">＋ チームを追加</button>
           <p class="hint">「組み合わせを作る」で、全チームが総当たりになるように並べます。同じチームが続けて出る「連戦」がいちばん少ない並びを選びます。</p>
+          <div id="brkArea" style="display:flex;flex-direction:column;gap:10px"></div>
           <div id="genArea"></div>
         </details>
         <div class="sum" id="sum"></div>
@@ -382,7 +383,7 @@ function sampleDoc() {
   const d = { app: 'handball-schedule', v: 1, title: '練習試合（例）', date: '', start: '09:30', dur: 20, gap: 5, courts: 1, cycles: 2,
     teams: ['A高', 'B高', 'C高'], rows: [], pinHash: null };
   const m = (a, b) => mk([[a, b]]);
-  d.rows = [m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高'), ev('1年生', 15), m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高'), ev('1年生', 15)];
+  d.rows = [m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高'), m('A高', 'B高'), m('C高', 'B高'), m('C高', 'A高')];
   return d;
 }
 let S = null, mode = null, code = null;
@@ -449,6 +450,7 @@ function buildOnce(T, base, rnd) {
   let slot = 0;
   while (pool.length) {
     const used = new Set(), games = [];
+    let slotC = 99;
     const minC = Math.min(...pool.map(m => m.c));
     for (let k = 0; k < S.courts; k++) {
       const fits = pool.filter(m => !used.has(m.a) && !used.has(m.b));
@@ -458,17 +460,17 @@ function buildOnce(T, base, rnd) {
       const score = m => rnd ? [Math.min(slot - last[m.a], slot - last[m.b], 2), Math.random(), 0] : [Math.min(slot - last[m.a], slot - last[m.b], 3), -(cnt[m.a] + cnt[m.b]), m.k];
       cand.sort((p, q) => { const x = score(p), y = score(q); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return y[i] - x[i]; return 0; });
       const m = cand[0];
-      games.push([m.a, m.b]); used.add(m.a); used.add(m.b);
+      games.push([m.a, m.b]); used.add(m.a); used.add(m.b); slotC = Math.min(slotC, m.c);
       pool = pool.filter(z => z !== m);
     }
     if (!games.length) break;
     games.forEach(([a, b]) => { last[a] = last[b] = slot; cnt[a]++; cnt[b]++; });
-    slots.push(games); slot++;
+    slots.push({ games, c: slotC }); slot++;
   }
   let back = 0, triple = 0;
   const prev = [new Set(), new Set()];
-  slots.forEach(g => {
-    const now = new Set(g.flat());
+  slots.forEach(sl => {
+    const now = new Set(sl.games.flat());
     now.forEach(x => { if (prev[0].has(x)) { back++; if (prev[1].has(x)) triple++; } });
     prev[1] = prev[0]; prev[0] = now;
   });
@@ -479,9 +481,19 @@ function generate() {
   let best = buildOnce(T, base, false);
   const t0 = Date.now();
   while (best.cost % 100000 && Date.now() - t0 < 600) { const t = buildOnce(T, base, true); if (t.cost < best.cost) best = t; }
+  // 特別枠を自動で入れる（入れない／総当たり1巡ごと／◯試合ごと）
+  const b = brk();
   S.rows = [];
-  S.rows = best.slots.map(g => mk(g.slice()));
+  const rows = [];
+  best.slots.forEach((sl, i) => {
+    rows.push(mk(sl.games.slice()));
+    const next = best.slots[i + 1];
+    const add = b.mode === 'cycle' ? (!next || next.c > sl.c) : b.mode === 'n' ? (next && (i + 1) % b.n === 0) : false;
+    if (add) rows.push(ev(b.label || '休憩', b.dur === S.dur ? null : b.dur));
+  });
+  S.rows = rows;
 }
+function brk() { return Object.assign({ mode: 'none', n: 3, label: '', dur: 15 }, S.brk || {}); }
 
 // ---------- 保存・共有（Firebase） ----------
 let FB = null, docRef = null, unsub = null, saveTimer = null, dirty = false;
@@ -677,6 +689,15 @@ function renderEdit() {
   stepper($('st-courts'), 'courts', S.courts, '面'); stepper($('st-cycles'), 'cycles', S.cycles, '回');
   $('teamCount').textContent = T.length + 'チーム';
   $('teamList').innerHTML = S.teams.map((t, i) => `<div class="team-line"><span class="no">${i + 1}</span><input id="team-${i}" data-team="${i}" value="${esc(t)}" placeholder="チーム名"><button type="button" data-delteam="${i}" aria-label="削除">×</button></div>`).join('');
+  const b = brk();
+  $('brkArea').innerHTML = `<label class="f">特別枠（休憩・1年生の試合・昼休みなど）を自動で入れる
+      <select id="brkMode"><option value="none" ${b.mode === 'none' ? 'selected' : ''}>入れない</option><option value="cycle" ${b.mode === 'cycle' ? 'selected' : ''}>総当たり1巡ごとに入れる</option><option value="n" ${b.mode === 'n' ? 'selected' : ''}>決まった試合数ごとに入れる</option></select></label>
+    ${b.mode === 'none' ? '' : `<div class="grid2">
+      <label class="f" style="grid-column:1/-1">名前<input id="brkLabel" value="${esc(b.label)}" placeholder="例：休憩・1年生・昼休み"></label>
+      ${b.mode === 'n' ? `<div class="f"><span class="hint">何試合ごと</span><div class="step"><button type="button" data-bstep="n" data-d="-1" aria-label="へらす">−</button><span>${b.n}<small>試合</small></span><button type="button" data-bstep="n" data-d="1" aria-label="ふやす">＋</button></div></div>` : ''}
+      <div class="f"><span class="hint">特別枠の時間</span><div class="step"><button type="button" data-bstep="dur" data-d="-5" aria-label="へらす">−</button><span>${b.dur}<small>分</small></span><button type="button" data-bstep="dur" data-d="5" aria-label="ふやす">＋</button></div></div>
+    </div>`}
+    <p class="hint">あとから1つずつ入れるときは、試合のカードの「⋯」→「下に特別枠」。</p>`;
   $('genArea').innerHTML = confirmGen
     ? `<div class="confirm"><b>今の進行表を作り直しますか？</b><span class="hint">手で直した対戦・時間・特別枠は消えます。</span><div class="row-btns"><button type="button" class="btn primary" id="genYes">作り直す</button><button type="button" class="btn" id="genNo">やめる</button></div></div>`
     : `<button type="button" class="btn primary" id="gen" ${T.length < 2 ? 'disabled' : ''}>組み合わせを作る（${T.length}チーム・${S.courts}面・${S.cycles}回）</button>`;
@@ -841,6 +862,12 @@ $('editView').addEventListener('click', e => {
   if (s) { const k = s.dataset.step, [lo, hi] = LIM[k]; S[k] = Math.max(lo, Math.min(hi, S[k] + Number(s.dataset.d))); render(); return; }
   const d = t.closest('[data-delteam]');
   if (d) { S.teams.splice(Number(d.dataset.delteam), 1); render(); return; }
+  const bs = t.closest('[data-bstep]');
+  if (bs) {
+    const b = brk(), k = bs.dataset.bstep, d = Number(bs.dataset.d);
+    b[k] = k === 'n' ? Math.max(1, Math.min(30, b.n + d)) : Math.max(5, Math.min(180, b.dur + d));
+    S.brk = b; render(); return;
+  }
   if (t.id === 'addTeam') { S.teams.push(''); render(false); const inp = $('team-' + (S.teams.length - 1)); inp && inp.focus(); return; }
   if (t.id === 'gen') { if (S.rows.length) { confirmGen = true; render(false); } else doGen(); return; }
   if (t.id === 'genYes') { doGen(); return; }
@@ -878,6 +905,8 @@ $('editView').addEventListener('change', e => {
   if (el.id === 'title') S.title = el.value;
   else if (el.id === 'date') S.date = el.value;
   else if (el.id === 'venue') S.venue = el.value;
+  else if (el.id === 'brkMode') S.brk = Object.assign(brk(), { mode: el.value });
+  else if (el.id === 'brkLabel') S.brk = Object.assign(brk(), { label: el.value });
   else if (el.id === 'start') { if (el.value) S.start = el.value; }
   else if (el.dataset.team !== undefined) {
     const i = Number(el.dataset.team), old = String(S.teams[i]).trim(), now = el.value.trim();
