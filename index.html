@@ -167,6 +167,14 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
 #grid td.off{color:var(--sub)}
 #grid td.back{box-shadow:inset 0 0 0 2px var(--warn)}
 #stats td:first-child{text-align:left;font-weight:700}
+.videobtn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:inherit;background:var(--card);border:2px solid var(--goal);border-radius:12px;padding:12px 14px;color:var(--ink);cursor:pointer}
+.videobtn .play{flex:0 0 44px;height:44px;border-radius:50%;background:var(--goal);position:relative}
+.videobtn .play::after{content:"";position:absolute;left:17px;top:13px;border-left:15px solid #fff;border-top:9px solid transparent;border-bottom:9px solid transparent}
+.videobtn b{display:block;font-size:17px}
+.videobtn small{color:var(--sub);font-size:13px}
+.vmodal{position:fixed;inset:0;z-index:20;background:rgba(8,12,18,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.vmodal video{width:100%;max-width:1100px;max-height:80vh;background:#000;border-radius:10px}
+.vmodal .btn{min-width:160px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:10}
 @media (prefers-reduced-motion:no-preference){.tabs button{transition:background .15s}}
 
@@ -223,6 +231,7 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
   <div id="gate" class="gate" hidden>
     <h1><span class="mark" aria-hidden="true"></span>ハンドボール進行表</h1>
     <p class="lead">練習試合の進行表を作って、番号で共有します。チーム数・コート面数・試合ごとの時間を変えられ、空きのチームもわかります。</p>
+    <button type="button" class="videobtn" id="videoBtn"><span class="play" aria-hidden="true"></span><span><b>使い方を動画で見る</b><small>約3分半・音声と字幕つき。はじめての人はここから</small></span></button>
     <form id="openForm" class="panel">
       <label class="f" for="codeInput">進行表番号（6けた）</label>
       <div class="inrow codebox">
@@ -261,6 +270,7 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
       <div class="top-row">
         <div class="ttl"><h1 id="hTitle">ハンドボール進行表</h1><div class="status" id="status"></div></div>
         <button id="shareBtn" class="codepill" type="button" hidden aria-label="進行表番号を知らせる（QRコード）"><span>進行表<br>番号</span><b id="codeText"></b></button>
+        <button id="videoBtn2" class="iconbtn" type="button" aria-label="使い方の動画">使い方</button>
         <button id="leaveBtn" class="iconbtn" type="button">切替</button>
       </div>
       <nav class="tabs" id="tabs">
@@ -350,6 +360,11 @@ tr.event td{background:var(--event);color:var(--event-ink);font-weight:700}
       <div class="sheets-scroll"><div id="sheets" class="sheets"></div></div>
     </section>
   </div>
+</div>
+<div class="vmodal noprint" id="vmodal" hidden role="dialog" aria-modal="true" aria-label="使い方の動画">
+  <video id="guideVideo" controls playsinline preload="none" poster="video/poster.jpg"><source src="video/guide.mp4" type="video/mp4"></video>
+  <p style="margin:0;color:#c9d3df;font-size:13px;text-align:center">スマホは横向きにするか、動画の右下のボタンで全画面にすると大きく見られます。</p>
+  <button type="button" class="btn" id="vclose">閉じる</button>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -620,6 +635,11 @@ $('openForm').onsubmit = e => { e.preventDefault(); const c = $('codeInput').val
 $('createBtn').onclick = () => { const p = $('newPin').value.replace(/\D/g, ''); if (p.length < 4 || p.length > 8) return gateMsg('createMsg', '管理番号は4〜8けたの数字にしてください。'); $('createMsg').hidden = true; createCloud(p); };
 $('localBtn').onclick = openLocal;
 $('leaveBtn').onclick = leave;
+function openVideo() { $('vmodal').hidden = false; const v = $('guideVideo'); v.play().catch(() => {}); }
+function closeVideo() { const v = $('guideVideo'); v.pause(); $('vmodal').hidden = true; }
+$('videoBtn').onclick = openVideo; $('videoBtn2').onclick = openVideo; $('vclose').onclick = closeVideo;
+$('vmodal').onclick = e => { if (e.target === $('vmodal')) closeVideo(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('vmodal').hidden) closeVideo(); });
 
 // ---------- 画面 ----------
 function showApp() {
